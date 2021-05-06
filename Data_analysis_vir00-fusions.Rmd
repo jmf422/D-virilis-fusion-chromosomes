@@ -1,0 +1,189 @@
+---
+title: "Comet interstrain data"
+author: "Jullien Flynn"
+date: "12/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Comet data of gemcitabine treatment plus 10 Gy radiation
+
+```{r}
+
+comets_11_28 <- read.table("~/Documents/AndyLab/Proposal/FISH/neo_Y/Comet_assay/comets_11-28_filtered_sorted_edit.format.txt", sep = "\t")
+head(comets_11_28)
+colnames(comets_11_28) <- c("filename", "olive_moment", "sample")
+comets_11_28$date <- "Nov28-20"
+
+comets_11_10 <- read.table("~/Documents/AndyLab/Proposal/FISH/neo_Y/Comet_assay/filter_11-10/comets_11-10_format.txt", sep = "\t")
+head(comets_11_10)
+colnames(comets_11_10) <- c("filename", "olive_moment", "sample")
+comets_11_10$date <- "Nov10-20"
+
+comets_12_21 <- read.table("~/Documents/AndyLab/Proposal/FISH/neo_Y/Comet_assay/comets_12-21.KH_filtered_sorted.format.txt", sep = "\t")
+head(comets_12_21)
+colnames(comets_12_21) <- c("filename", "olive_moment", "sample")
+comets_12_21$date <- "Dec21-20"
+
+
+comets_final <- rbind(comets_11_28, comets_11_10, comets_12_21)
+nrow(comets_final)
+nrow(comets_11_28)
+nrow(comets_11_10)
+nrow(comets_12_21)
+
+
+(nrow(comets_11_28) + nrow(comets_11_10) + nrow(comets_12_21)) == nrow(comets_final)
+# now, make a boxplot
+
+library(ggplot2)
+table(comets_final$sample)
+
+
+comets_final$sample <- factor(comets_final$sample, levels = c("Gdvir_con", "Gdvir_rad", "vir00_con", "vir00_rad", "KH15_con", "KH15_rad", "vir8_con", "vir8_rad", "vir9_con", "vir9_rad", "vir48_con", "vir48_rad", "vir85_con", "vir85_rad"))
+
+ggplot(data = comets_final, aes(x = sample, y = olive_moment, color = date)) + 
+  geom_boxplot() +
+  geom_jitter(alpha = 0.7) +
+  ylab("olive moment") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+   theme(text = element_text(size=16))
+
+#there is a batch effect slightly for KH15 rad too, on the same day, so they are equal.
+
+# mean difference from the respective control
+install.packages("dabestr")
+
+write.csv(comets_final, "~/Documents/AndyLab/Proposal/FISH/neo_Y/Comet_assay/comets_finalmod_jan29-21_wdates.csv", quote = F, row.names = F)
+
+#Note that the dabestr script was run on the Cornell server rather than my Mac because of incompatibility with my old R version..
+
+```
+Relate the comet assay data to the satellite abundance.  
+
+```{r}
+
+mean_diff_sat <- read.csv("~/Documents/AndyLab/Proposal/FISH/neo_Y/Comet_assay/meandiff_satamount_Jan29-21.csv", header = T)
+library(ggplot2)
+
+mean_diff_sat
+
+ggplot(mean_diff_sat, aes(y=Meandiff, x=total_sat, color = Line)) +
+  geom_point(size=5) + 
+  theme_bw() +
+  #geom_text(aes(label=Row.names),hjust=0.5, vjust=1.0) +
+  ylab("Mean diff olive moment") +
+  xlab("total satellite abundance") +
+  theme(text = element_text(size=16))
+
+```
+Analyze the satellite DNA abundance in the 3 versions of vir00 sequenced  
+
+```{r}
+
+data <- read.delim("~/Documents/AndyLab/Proposal/FISH/neo_Y/sequencing_Feb-21/vir00_3versions.rep.compiled")
+
+kmer.labels <- sapply(strsplit(colnames(data), "\\."), '[', 1)
+colnames(data) <- kmer.labels
+samples <- as.vector(data$lines)
+
+samples2 <- gsub(".rep.total", "", samples)
+samples2
+data[,1] <- NULL
+rownames(data) <- samples2
+
+
+data_ordered <- data[ order(row.names(data)), ]
+
+samples_depth <- read.delim("~/Documents/AndyLab/Proposal/FISH/neo_Y/sequencing_Feb-21/vir00_read.depth", header = F)
+sample_names <- samples_depth$V1
+samples_depth[,1] <- NULL
+rownames(samples_depth) <- sample_names
+samples_depth_ordered <- samples_depth[ order(row.names(samples_depth)), ]
+
+# now normalize the data
+data_normalized <- data_ordered/samples_depth_ordered$V3
+# checked - looks correct
+
+# now sort the data
+kmer_means <- colMeans(data)
+data_normalized_sorted <- data_normalized[,order(kmer_means, decreasing=T)]
+rownames(data_normalized_sorted)
+
+# the nofus 2 has the expected amount of satellites? But it has a lot more
+
+kmers_of_interest <- c("AAACTAC", "AAATTAC", "AAACTAT")
+y_enriched_kmers <- c("AAAAAC", "AAAAACAAAC", "AACAATCC", "AAAGTAT", "AAATCAAC", "AAACAT", "AAACTAG", "AAATCAT", "AATCAATT", "AATAATAG", "AATAGATT", "ACAG", "AAAC", "AACTATT")
+
+data_normalized_sorted[kmers_of_interest]
+
+data_normalized_sorted[, y_enriched_kmers] 
+# Y enriched kmers are higher in Xfus-1 than Xfus-2 (concordant with extra Y chromosomes here). In Nofus-2, some kmers are 10x higher than the others. Conclusion: Xfus-1 has higher Y chrom dosage - don't use it to quantify satellites. We can also see this with read depth mapping to each chromosome. Something went wrong with the Nofus-2 library prep, we could see from the traces.
+
+data_filtered <- data_normalized_sorted[c(1,3,5,6), kmers_of_interest]
+data_filtered$total <- rowSums(data_filtered)
+
+satellite <- c()
+sample <- c()
+abundance <- c()
+category <- c()
+
+for (i in 1:nrow(data_filtered)) {
+  satellite <- c(satellite, colnames(data_filtered))
+  sample <- c(sample, rep(rownames(data_filtered)[i], times=ncol(data_filtered)))
+  abundance <- c(abundance, as.numeric(data_filtered[i,1:ncol(data_filtered)]*7))
+  temp <- unlist(strsplit(rownames(data_filtered)[i], "[-]"))[1]
+  category <- c(category, rep(temp, times = ncol(data_filtered) ))
+} 
+
+(data_toplot <- data.frame(sample, satellite, abundance, category))
+
+library(ggplot2)
+
+ggplot(data = data_toplot, aes(x = satellite, y = abundance, color = category)) + 
+  geom_point(size = 1.5, alpha=0.7) +
+  theme_bw() +
+  theme(text = element_text(size=14))
+
+(9.5-8.4)/9.5
+# 12% loss in total satellite DNA
+
+
+```
+Look at the enrichment of heterozygous singletons on Chr 3 in vir00-Yfus and vir00-Xfus  
+
+```{r}
+
+# this is for the vir00-Yfus
+prop_het_sing <- read.table ("~/Documents/AndyLab/Proposal/FISH/neo_Y/more_depth_virilis/simulations_degradation/RS2_permut/Dvir_random_Chr3_muts.onlyChr.txt", sep = "\t", header = F)
+
+# this is for the vir00-Xfus
+#prop_het_sing <- read.table ("~/Documents/AndyLab/Proposal/FISH/neo_Y/more_depth_virilis/simulations_degradation/RS2_permut/Dvir_random_Chr3_muts.onlyChr.Xfus.txt", sep = "\t", header = F)
+
+head(prop_het_sing)
+
+# make the plots
+
+# this is for vir00-Yfus
+qplot(prop_het_sing$V2, geom="histogram", binwidth = 0.15) + geom_vline(xintercept=12.87, color="red")
+
+# this is for vir00-Xfus
+#qplot(prop_het_sing$V2, geom="histogram", binwidth = 0.15) + geom_vline(xintercept=13.94, color="red")
+
+# this is for vir00-Yfus
+length(which(prop_het_sing$V2 > 12.87)) # no values, p < 0.001
+
+# this is for vir00-Xfus
+#length(which(prop_het_sing$V2 > 13.94)) # 31/1000 - 0.031
+
+
+ggplot(mean_diff_sat, aes(y=Meandiff, x=AAACTAC_sat, color = Line)) +
+  geom_point(size=2) + 
+  theme_bw() +
+  #geom_text(aes(label=Row.names),hjust=0.5, vjust=1.0) +
+  ylab("Mean diff olive moment") +
+  xlab("AAACTAC abundance") +
+  theme(text = element_text(size=12))
