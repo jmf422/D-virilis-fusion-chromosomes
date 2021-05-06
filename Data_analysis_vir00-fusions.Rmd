@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 #Comet data of gemcitabine treatment plus 10 Gy radiation
 
+note that the strain names sometimes used here for the vir00 substrains may be different from the manuscript. vir00 = vir00-Yfus, KH30-11 = vir00-Xfus, KH15 = vir00-Nofus.  
+
 ```{r}
 
 comets_11_28 <- read.table("~/Documents/AndyLab/Proposal/FISH/neo_Y/Comet_assay/comets_11-28_filtered_sorted_edit.format.txt", sep = "\t")
@@ -52,12 +54,12 @@ ggplot(data = comets_final, aes(x = sample, y = olive_moment, color = date)) +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
    theme(text = element_text(size=16))
 
-#there is a batch effect slightly for KH15 rad too, on the same day, so they are equal.
+#there is a slight batch effect for both vir00 (vir00-Yfus) and KH15 (vir00-Nofus), but it is coming from the same days, so not concerning.
 
 # mean difference from the respective control
-install.packages("dabestr")
+#install.packages("dabestr")
 
-write.csv(comets_final, "~/Documents/AndyLab/Proposal/FISH/neo_Y/Comet_assay/comets_finalmod_jan29-21_wdates.csv", quote = F, row.names = F)
+#write.csv(comets_final, "~/Documents/AndyLab/Proposal/FISH/neo_Y/Comet_assay/comets_finalmod_jan29-21_wdates.csv", quote = F, row.names = F)
 
 #Note that the dabestr script was run on the Cornell server rather than my Mac because of incompatibility with my old R version..
 
